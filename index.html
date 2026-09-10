@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dream Gate — the gate on how a memory grows</title>
+<meta name="description" content="An AI's memory grows overnight by reorganising itself. Dream-gate adopts a night only if recall measurably improves AND no known-true answer breaks — otherwise it reverts. Growth without false memories.">
+<style>
+  :root{
+    --bg:#0b0d13; --panel:#151a24; --panel2:#1c2330; --line:#2a3242;
+    --ink:#e9edf4; --dim:#8b95a6; --accent:#b79cff; --good:#5fd39a; --bad:#ff6b6b; --warn:#ffcc4d;
+    --chip:#1d2534; --mono:ui-monospace,SFMono-Regular,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,Segoe UI,Roboto,sans-serif;padding:0 0 4rem}
+  .wrap{max-width:880px;margin:0 auto;padding:0 1.25rem}
+  header{padding:2.6rem 0 1.2rem}
+  h1{font-size:1.9rem} h1 .hl{color:var(--accent)}
+  .sub{color:var(--dim);margin-top:.5rem;max-width:47rem}
+  h2{font-size:1.1rem;margin:1.8rem 0 .7rem}
+  .thesis{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:1.2rem 0;color:var(--dim)}
+  .thesis strong{color:var(--ink)}
+  .presets{display:flex;gap:.6rem;flex-wrap:wrap;margin:.6rem 0}
+  .presets button{background:var(--chip);color:var(--dim);border:1px solid var(--line);border-radius:8px;font-size:.82rem;font-weight:600;padding:.4rem .85rem;cursor:pointer}
+  .presets button:hover{filter:brightness(1.15)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+  @media(max-width:700px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:.9rem 1rem}
+  .card h3{font:700 .8rem var(--mono);letter-spacing:.04em;color:var(--accent);margin-bottom:.4rem}
+  textarea{width:100%;min-height:7rem;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:.5rem .7rem;font:.85rem var(--mono);resize:vertical}
+  .hint{font-size:.75rem;color:var(--dim);margin-top:.3rem}
+  button.go{background:var(--accent);color:#160b2e;border:0;border-radius:9px;padding:.7rem 1.5rem;font-weight:800;font-size:1rem;cursor:pointer;margin:1rem 0}
+  button.go:hover{filter:brightness(1.1)}
+  .out{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:1rem 1.2rem;margin:.6rem 0}
+  .verdict{font:800 1.3rem var(--mono)}
+  .v-ADOPT{color:var(--good)} .v-REVERT{color:var(--bad)}
+  .counts{font:.9rem var(--mono);color:var(--dim);margin:.5rem 0}
+  .reasons{color:var(--bad);font-size:.88rem} .reasons li{margin:.25rem 0 .25rem 1.1rem}
+  code{font:.88em var(--mono);background:var(--chip);padding:.08em .35em;border-radius:4px}
+  footer{margin-top:2.4rem;padding-top:1.2rem;border-top:1px solid var(--line);color:var(--dim);font-size:.85rem}
+  footer a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Dream Gate <span class="hl">·</span> the gate on how a memory grows</h1>
+  <p class="sub">An AI whose weights are frozen still grows — its memory accretes and reorganises itself overnight into better-connected knowledge. Dream-gate makes that growth safe: a night is <strong>adopted</strong> only if recall measurably improves <em>and</em> no known-true answer breaks. Otherwise it's <strong>reverted</strong>, and the memory keeps yesterday's shape. Growth, one witnessed night at a time — never on a false memory.</p>
+</header>
+
+<div class="thesis">
+  <strong>Live in the estate.</strong> This gate is wired into a running agent's nightly consolidation: it snapshots the memory, lets the night reorganise a candidate, scores a recall set and a <em>safety canary</em> (facts known true) before and after, and reverts the night if the canary falls. The kernel below is that exact gate.
+</div>
+
+<h2>Try a night</h2>
+<div class="presets">
+  <button id="p-good">a good night (learns, canary intact)</button>
+  <button id="p-false">a false-memory night (learns, but breaks a known fact)</button>
+  <button id="p-noop">a no-op night (learns nothing)</button>
+</div>
+<div class="grid">
+  <div class="card">
+    <h3>the memory BEFORE the night — facts it can answer (s · p · o per line)</h3>
+    <textarea id="before"></textarea>
+  </div>
+  <div class="card">
+    <h3>the candidate AFTER the night reorganised</h3>
+    <textarea id="after"></textarea>
+  </div>
+</div>
+<div class="grid" style="margin-top:1rem">
+  <div class="card">
+    <h3>recall probes — what growth should let it answer (s · p · o)</h3>
+    <textarea id="probes" style="min-height:5rem"></textarea>
+  </div>
+  <div class="card">
+    <h3>safety canary — known-true answers that must NOT break (s · p · o)</h3>
+    <textarea id="canary" style="min-height:5rem"></textarea>
+  </div>
+</div>
+<button class="go" id="go">gate the night</button>
+<div class="out" id="out" hidden>
+  <div class="verdict" id="verdict"></div>
+  <div class="counts" id="counts"></div>
+  <ul class="reasons" id="reasons"></ul>
+</div>
+
+<h2>The gate</h2>
+<div class="thesis">
+  <code>dreamGate</code>: ADOPT iff recall rose by at least <code>minGain</code> (it genuinely learned) AND the safety canary held (no known-true answer lost). A night that soars on recall but flips a known fact to a falsehood is <strong>reverted</strong> — that's the whole point. Mutation-gated 24/24. Pairs with <a href="https://github.com/sjgant80-hub/fall-remember">fall-remember</a> (the dodeca) and <a href="https://github.com/sjgant80-hub/self-audit">self-audit</a>.
+</div>
+
+<footer>
+  <p>MIT · <a href="https://github.com/sjgant80-hub/dream-gate">source &amp; mutation gate</a> — the decision is the gated <code>kernel.mjs</code> verbatim (injected, CI-diffed), wired live into the soul's nightly consolidation. Pure client-side.</p>
+</footer>
+</div>
+
+<script type="module">
+// ⟦KERNEL-BEGIN⟧ generated from kernel.mjs by make-page.mjs — do not edit here
+// dream-gate — proof-of-play for MEMORY growth. The gate on the dreamer's overnight work.
+//
+// sididy grows the konomi way: its neural weights are frozen, but its dodeca (fall-remember)
+// accretes memory and the dreamer reorganises it overnight into typed connections — measurably
+// better recall, no retraining. This gate makes that growth SAFE: a night's consolidation is
+// ADOPTED only if it measurably improves recall AND breaks no known-true answer (a safety
+// canary). Otherwise the night is REVERTED and the dodeca keeps yesterday's shape. The mind
+// grows one witnessed night at a time — never on a step that invents a false memory.
+//
+// Recall and canary are COUNTS-CORRECT (higher is better) — the opposite polarity to a loss.
+// Pure and total; guards one-per-line.
+
+const isObj = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+// Score an answerer against a probe set. answer(s, p) returns the recalled object or null; a probe
+// {s, p, o} is CORRECT when the answer equals its expected o (case-normalised). answer is passed
+// in (the soul's ask/recall), so this stays pure and testable.
+function scoreProbes(answer, probes) {
+  if (typeof answer !== 'function') return { ok: false, why: 'answer must be a function (s, p) => object|null' };
+  if (!Array.isArray(probes)) return { ok: false, why: 'probes must be an array of { s, p, o }' };
+  if (probes.length === 0) return { ok: false, why: 'probes must be non-empty — a gate with no probe proves nothing' };
+  let correct = 0;
+  const missed = [];
+  for (const pr of probes) {
+    if (!isObj(pr)) return { ok: false, why: 'each probe is { s, p, o }' };
+    if (typeof pr.s !== 'string') return { ok: false, why: 'probe.s must be a string' };
+    if (typeof pr.p !== 'string') return { ok: false, why: 'probe.p must be a string' };
+    if (typeof pr.o !== 'string') return { ok: false, why: 'probe.o must be a string' };
+    let got;
+    try { got = answer(pr.s, pr.p); } catch { got = null; }
+    const norm = (x) => (typeof x === 'string' ? x.trim().toLowerCase() : null);
+    if (norm(got) !== null && norm(got) === norm(pr.o)) correct += 1;
+    else missed.push(pr.s + ' ' + pr.p);
+  }
+  return { ok: true, correct, total: probes.length, missed };
+}
+
+/**
+ * dreamGate({ recallBefore, recallAfter, canaryBefore, canaryAfter, minGain }) — adopt the night?
+ * All four are correct-counts (higher = better).
+ *   IMPROVED — recall rose by at least minGain: recallAfter >= recallBefore + minGain.
+ *   SAFE     — no known-true answer was lost: canaryAfter >= canaryBefore.
+ * ADOPT iff improved AND safe. Otherwise REVERT, naming why. A night that learns nothing new
+ * (no improvement) is reverted too — the dodeca does not churn for a no-op.
+ */
+function dreamGate(m) {
+  if (!isObj(m)) return { ok: false, why: 'reads { recallBefore, recallAfter, canaryBefore, canaryAfter, minGain }' };
+  for (const k of ['recallBefore', 'recallAfter', 'canaryBefore', 'canaryAfter', 'minGain']) {
+    if (!Number.isInteger(m[k])) return { ok: false, why: k + ' must be an integer count' };
+  }
+  if (m.recallBefore < 0) return { ok: false, why: 'recallBefore cannot be negative' };
+  if (m.recallAfter < 0) return { ok: false, why: 'recallAfter cannot be negative' };
+  if (m.canaryBefore < 0) return { ok: false, why: 'canaryBefore cannot be negative' };
+  if (m.canaryAfter < 0) return { ok: false, why: 'canaryAfter cannot be negative' };
+  if (m.minGain < 0) return { ok: false, why: 'minGain must be non-negative' };
+  const improved = m.recallAfter >= m.recallBefore + m.minGain;
+  const safe = m.canaryAfter >= m.canaryBefore;
+  const reasons = [];
+  if (!improved) reasons.push('recall did not improve enough (' + m.recallBefore + ' -> ' + m.recallAfter + ', needed at least +' + m.minGain + ')');
+  if (!safe) reasons.push('the night broke a known-true answer — safety canary fell (' + m.canaryBefore + ' -> ' + m.canaryAfter + ')');
+  const adopt = improved && safe;
+  return { ok: true, adopt, verdict: adopt ? 'ADOPT' : 'REVERT', improved, safe, reasons };
+}
+
+/**
+ * gateNight — the whole decision, given an answerer BEFORE consolidation and one AFTER, a recall
+ * probe set, and a canary set of known-true facts. Returns the verdict + the counts so the caller
+ * (the soul's sleep flow) keeps the candidate on ADOPT or restores the snapshot on REVERT.
+ */
+function gateNight(answerBefore, answerAfter, probes, canary, minGain) {
+  if (typeof answerBefore !== 'function') return { ok: false, why: 'answerBefore must be a function' };
+  if (typeof answerAfter !== 'function') return { ok: false, why: 'answerAfter must be a function' };
+  if (!Number.isInteger(minGain)) return { ok: false, why: 'minGain must be an integer count' };
+  if (minGain < 0) return { ok: false, why: 'minGain must be non-negative' };
+  const rb = scoreProbes(answerBefore, probes);
+  if (!rb.ok) return { ok: false, why: 'recall before: ' + rb.why };
+  const ra = scoreProbes(answerAfter, probes);
+  if (!ra.ok) return { ok: false, why: 'recall after: ' + ra.why };
+  const cb = scoreProbes(answerBefore, canary);
+  if (!cb.ok) return { ok: false, why: 'canary before: ' + cb.why };
+  const ca = scoreProbes(answerAfter, canary);
+  if (!ca.ok) return { ok: false, why: 'canary after: ' + ca.why };
+  const g = dreamGate({ recallBefore: rb.correct, recallAfter: ra.correct, canaryBefore: cb.correct, canaryAfter: ca.correct, minGain });
+  if (!g.ok) return { ok: false, why: g.why };
+  return {
+    ok: true, adopt: g.adopt, verdict: g.verdict,
+    recallBefore: rb.correct, recallAfter: ra.correct, canaryBefore: cb.correct, canaryAfter: ca.correct,
+    recallTotal: probes.length, canaryTotal: canary.length, reasons: g.reasons,
+  };
+}
+// ⟦KERNEL-END⟧
+
+const $ = (id) => document.getElementById(id);
+const parse = (txt) => txt.split('\n').map((l) => l.split('·').map((x) => x.trim())).filter((a) => a.length === 3 && a[0]).map(([s, p, o]) => ({ s, p, o }));
+const answerer = (facts) => (s, p) => { const f = facts.find((x) => x.s === s && x.p === p); return f ? f.o : null; };
+
+const PRESETS = {
+  good: {
+    before: 'konomi · related · gate\nsididy · isa · agent',
+    after: 'konomi · related · gate\nsididy · isa · agent\nwitness · isa · gate\nseam · isa · metric\ndodeca · has · chambers',
+    probes: 'witness · isa · gate\nseam · isa · metric\ndodeca · has · chambers',
+    canary: 'konomi · related · gate\nsididy · isa · agent',
+  },
+  false: {
+    before: 'konomi · related · gate\nsididy · isa · agent',
+    after: 'konomi · related · gate\nsididy · isa · tool\nwitness · isa · gate\nseam · isa · metric\ndodeca · has · chambers',
+    probes: 'witness · isa · gate\nseam · isa · metric\ndodeca · has · chambers',
+    canary: 'konomi · related · gate\nsididy · isa · agent',
+  },
+  noop: {
+    before: 'konomi · related · gate\nsididy · isa · agent',
+    after: 'konomi · related · gate\nsididy · isa · agent',
+    probes: 'witness · isa · gate\nseam · isa · metric',
+    canary: 'konomi · related · gate\nsididy · isa · agent',
+  },
+};
+function load(name) { const p = PRESETS[name]; $('before').value = p.before; $('after').value = p.after; $('probes').value = p.probes; $('canary').value = p.canary; run(); }
+$('p-good').addEventListener('click', () => load('good'));
+$('p-false').addEventListener('click', () => load('false'));
+$('p-noop').addEventListener('click', () => load('noop'));
+$('go').addEventListener('click', run);
+['before', 'after', 'probes', 'canary'].forEach((id) => $(id).addEventListener('input', run));
+
+function run() {
+  const before = answerer(parse($('before').value));
+  const after = answerer(parse($('after').value));
+  const probes = parse($('probes').value);
+  const canary = parse($('canary').value);
+  if (probes.length === 0 || canary.length === 0) { $('out').hidden = false; $('verdict').innerHTML = 'add at least one probe and one canary (s · p · o)'; $('counts').textContent = ''; $('reasons').innerHTML = ''; return; }
+  const r = gateNight(before, after, probes, canary, 1);
+  $('out').hidden = false;
+  if (!r.ok) { $('verdict').textContent = 'refused — ' + r.why; $('counts').textContent = ''; $('reasons').innerHTML = ''; return; }
+  $('verdict').className = 'verdict v-' + r.verdict;
+  $('verdict').textContent = r.adopt ? '✓ ADOPT — the night made the memory better' : '✗ REVERT — the memory keeps yesterday’s shape';
+  $('counts').innerHTML = 'recall ' + r.recallBefore + '/' + r.recallTotal + ' → <b>' + r.recallAfter + '/' + r.recallTotal + '</b>  ·  safety canary ' + r.canaryBefore + '/' + r.canaryTotal + ' → <b>' + r.canaryAfter + '/' + r.canaryTotal + '</b>';
+  $('reasons').innerHTML = r.reasons.map((x) => '<li>' + x + '</li>').join('');
+}
+load('good');
+</script>
+</body>
+</html>
