@@ -6,6 +6,8 @@ The gate on how a memory **grows**. An AI whose neural weights are frozen can st
 memory accretes and, overnight, a dreamer reorganises it into better-connected knowledge: more
 recall, no retraining. dream-gate makes that growth **safe**.
 
+_The dreaming-brain design — memory that consolidates on a dream-cycle and wakes smarter — is Gary Floyd's (Nexus)._
+
 A night's consolidation is **ADOPTED** only if:
 
 1. **it improved recall** — the reorganised memory answers at least `minGain` more probe questions than before, **and**
